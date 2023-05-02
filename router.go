@@ -8,8 +8,12 @@ import (
 )
 
 var paramReg = regexp.MustCompile(`{([^{}]+)}`)
-var NotFound = errors.New("route not found")
-var RouteHasExists = errors.New("route is exists")
+
+var (
+	NotFoundErr       = errors.New("route not found")
+	MethodNotAllowErr = errors.New("method not allowed")
+	RouteHasExists    = errors.New("route already exists")
+)
 
 type Router[T any] struct {
 	paths        map[string]T
@@ -30,7 +34,7 @@ func (router *Router[T]) IsEmpty() bool {
 }
 
 func (router *Router[T]) Find(path string) (T, contracts.RouteParams, error) {
-	if strings.HasSuffix(path, "/") {
+	if strings.HasSuffix(path, "/") && path != "/" {
 		path = path[:len(path)-1]
 	}
 	result, ok := router.paths[path]
@@ -98,7 +102,7 @@ func (router *Router[T]) find(path string, tree map[string][]*RouterNode[T], par
 		}
 	}
 	var result T
-	return result, NotFound
+	return result, NotFoundErr
 }
 
 func (router *Router[T]) Add(route string, data T) (string, error) {

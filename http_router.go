@@ -14,13 +14,26 @@ var (
 	MiddlewareError = errors.New("middleware error") // 中间件必须有一个返回值
 )
 
+var (
+	methodList = [...]string{
+		http.MethodGet,
+		http.MethodHead,
+		http.MethodPost,
+		http.MethodPut,
+		http.MethodPatch,
+		http.MethodDelete,
+		http.MethodConnect,
+		http.MethodOptions,
+		http.MethodTrace,
+	}
+)
+
 type HttpRouter struct {
 	app          contracts.Application
-	engine       contracts.HttpEngine
 	groups       []contracts.RouteGroup
 	routes       []contracts.Route
-	router       contracts.Router[contracts.Route]
-	hostsRouters contracts.Router[contracts.Router[contracts.Route]]
+	routers      map[string]contracts.Router[contracts.Route]
+	hostsRouters contracts.Router[map[string]contracts.Router[contracts.Route]]
 
 	// 全局中间件
 	middlewares []contracts.MagicalFunc
@@ -32,57 +45,73 @@ func NewHttpRouter(app contracts.Application) contracts.HttpRouter {
 		routes:       make([]contracts.Route, 0),
 		groups:       make([]contracts.RouteGroup, 0),
 		middlewares:  make([]contracts.MagicalFunc, 0),
-		router:       NewRouter[contracts.Route](),
-		hostsRouters: NewRouter[contracts.Router[contracts.Route]](),
+		routers:      map[string]contracts.Router[contracts.Route]{},
+		hostsRouters: NewRouter[map[string]contracts.Router[contracts.Route]](),
 	}
 
 	return router
 }
 
-func (httpRouter *HttpRouter) addHostRoute(hostRouters map[string]contracts.Router[contracts.Route], route contracts.Route) (string, error) {
+func (httpRouter *HttpRouter) addHostRoute(hostRouters map[string]map[string]contracts.Router[contracts.Route], route contracts.Route) []string {
 	if host := route.GetHost(); host != "" {
 		if hostRouters[host] == nil {
-			hostRouters[host] = NewRouter[contracts.Route]()
+			hostRouters[host] = map[string]contracts.Router[contracts.Route]{}
 		}
-		return hostRouters[host].Add(route.GetPath(), route)
+
+		return httpRouter.addRoute(hostRouters[host], route)
 	}
 
-	return "", nil
+	return nil
+}
+
+func (httpRouter *HttpRouter) addRoute(routers map[string]contracts.Router[contracts.Route], route contracts.Route) []string {
+	var failedSignatures []string
+	for _, method := range route.Method() {
+		if routers[method] == nil {
+			routers[method] = NewRouter[contracts.Route]()
+		}
+
+		signature, err := routers[method].Add(route.GetPath(), route)
+		if err != nil {
+			failedSignatures = append(failedSignatures, fmt.Sprintf("[%s] %s", method, signature))
+		}
+	}
+	return failedSignatures
 }
 
 func (httpRouter *HttpRouter) Mount() error {
 	var failedSignatures []string
-	var signature string
-	var err error
-	var hostRoutersMap = make(map[string]contracts.Router[contracts.Route])
+	var hostRoutersMap = make(map[string]map[string]contracts.Router[contracts.Route])
 
 	for _, route := range httpRouter.routes {
-		signature, err = httpRouter.router.Add(route.GetPath(), route)
-		if err != nil {
-			failedSignatures = append(failedSignatures, signature)
+		tmpFailedSignatures := httpRouter.addRoute(httpRouter.routers, route)
+		if len(tmpFailedSignatures) > 0 {
+			failedSignatures = append(failedSignatures, tmpFailedSignatures...)
 		}
 
-		if signature, err = httpRouter.addHostRoute(hostRoutersMap, route); err != nil {
-			failedSignatures = append(failedSignatures, signature)
+		tmpFailedSignatures = httpRouter.addHostRoute(hostRoutersMap, route)
+		if len(tmpFailedSignatures) > 0 {
+			failedSignatures = append(failedSignatures, tmpFailedSignatures...)
 		}
 	}
 
 	for _, group := range httpRouter.groups {
 		for _, route := range group.Routes() {
-			signature, err = httpRouter.router.Add(route.GetPath(), route)
-			if err != nil {
-				failedSignatures = append(failedSignatures, signature)
+			tmpFailedSignatures := httpRouter.addRoute(httpRouter.routers, route)
+			if len(tmpFailedSignatures) > 0 {
+				failedSignatures = append(failedSignatures, tmpFailedSignatures...)
 			}
-			if signature, err = httpRouter.addHostRoute(hostRoutersMap, route); err != nil {
-				failedSignatures = append(failedSignatures, signature)
+			tmpFailedSignatures = httpRouter.addHostRoute(hostRoutersMap, route)
+			if len(tmpFailedSignatures) > 0 {
+				failedSignatures = append(failedSignatures, tmpFailedSignatures...)
 			}
 		}
 	}
 
 	if len(hostRoutersMap) > 0 {
-		httpRouter.hostsRouters = NewRouter[contracts.Router[contracts.Route]]()
+		httpRouter.hostsRouters = NewRouter[map[string]contracts.Router[contracts.Route]]()
 		for host, router := range hostRoutersMap {
-			signature, err = httpRouter.hostsRouters.Add(host, router)
+			signature, err := httpRouter.hostsRouters.Add(host, router)
 			if err != nil {
 				failedSignatures = append(failedSignatures, signature)
 			}
@@ -95,21 +124,70 @@ func (httpRouter *HttpRouter) Mount() error {
 	return nil
 }
 
-func (httpRouter *HttpRouter) Route(url *url.URL) (contracts.Route, contracts.RouteParams, error) {
+func (httpRouter *HttpRouter) Add(method any, path string, handler any, middlewares ...any) contracts.Route {
+	if strings.HasSuffix(path, "/") && path != "/" {
+		path = path[:len(path)-1]
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+
+	methods := make([]string, 0)
+	switch v := method.(type) {
+	case string:
+		methods = []string{v}
+	case []string:
+		methods = v
+	}
+	route := NewRoute(methods, path, ConvertToMiddlewares(middlewares...), container.NewMagicalFunc(handler))
+	httpRouter.routes = append(httpRouter.routes, route)
+	return route
+}
+
+func (httpRouter *HttpRouter) Route(method string, url *url.URL) (contracts.Route, contracts.RouteParams, error) {
+	route, params, err := httpRouter.route(method, url)
+	if err == nil {
+		return route, params, nil
+	}
+	for _, item := range methodList {
+		if item == method {
+			continue
+		}
+		route, params, err = httpRouter.route(item, url)
+		if err == nil {
+			return route, params, MethodNotAllowErr
+		}
+	}
+	return nil, nil, NotFoundErr
+}
+
+func (httpRouter *HttpRouter) route(method string, url *url.URL) (contracts.Route, contracts.RouteParams, error) {
+	path := url.Path
+	if strings.HasSuffix(path, "/") && path != "/" {
+		path = path[:len(path)-1]
+	}
+
 	if !httpRouter.hostsRouters.IsEmpty() {
-		router, hostParams, hostErr := httpRouter.hostsRouters.Find(url.Host)
+		routers, hostParams, hostErr := httpRouter.hostsRouters.Find(url.Host)
 		if hostErr == nil {
-			route, params, err := router.Find(url.Path)
-			if err == nil {
-				for key, value := range hostParams {
-					params[key] = value
+			if routers[method] != nil {
+				route, params, err := routers[method].Find(path)
+				if err == nil {
+					for key, value := range hostParams {
+						params[key] = value
+					}
+					return route, params, nil
 				}
-				return route, params, nil
 			}
 		}
 	}
 
-	route, params, err := httpRouter.router.Find(url.Path)
+	router := httpRouter.routers[method]
+	if router == nil {
+		return nil, nil, NotFoundErr
+	}
+
+	route, params, err := router.Find(path)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -165,17 +243,4 @@ func (httpRouter *HttpRouter) Use(middlewares ...any) {
 
 func (httpRouter *HttpRouter) Middlewares() []contracts.MagicalFunc {
 	return httpRouter.middlewares
-}
-
-func (httpRouter *HttpRouter) Add(method any, path string, handler any, middlewares ...any) contracts.Route {
-	methods := make([]string, 0)
-	switch v := method.(type) {
-	case string:
-		methods = []string{v}
-	case []string:
-		methods = v
-	}
-	route := NewRoute(methods, path, ConvertToMiddlewares(middlewares...), container.NewMagicalFunc(handler))
-	httpRouter.routes = append(httpRouter.routes, route)
-	return route
 }
