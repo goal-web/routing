@@ -4,7 +4,7 @@ import (
 	"errors"
 	"github.com/goal-web/container"
 	"github.com/goal-web/contracts"
-	"github.com/labstack/echo/v4"
+	"net/http"
 )
 
 var (
@@ -73,31 +73,31 @@ func (group *Group) Add(method any, path string, handler any, middlewares ...any
 }
 
 func (group *Group) Get(path string, handler any, middlewares ...any) contracts.RouteGroup {
-	return group.Add(echo.GET, path, handler, middlewares...)
+	return group.Add(http.MethodGet, path, handler, middlewares...)
 }
 
 func (group *Group) Post(path string, handler any, middlewares ...any) contracts.RouteGroup {
-	return group.Add(echo.POST, path, handler, middlewares...)
+	return group.Add(http.MethodPost, path, handler, middlewares...)
 }
 
 func (group *Group) Delete(path string, handler any, middlewares ...any) contracts.RouteGroup {
-	return group.Add(echo.DELETE, path, handler, middlewares...)
+	return group.Add(http.MethodDelete, path, handler, middlewares...)
 }
 
 func (group *Group) Put(path string, handler any, middlewares ...any) contracts.RouteGroup {
-	return group.Add(echo.PUT, path, handler, middlewares...)
+	return group.Add(http.MethodPut, path, handler, middlewares...)
 }
 
 func (group *Group) Trace(path string, handler any, middlewares ...any) contracts.RouteGroup {
-	return group.Add(echo.TRACE, path, handler, middlewares...)
+	return group.Add(http.MethodTrace, path, handler, middlewares...)
 }
 
 func (group *Group) Patch(path string, handler any, middlewares ...any) contracts.RouteGroup {
-	return group.Add(echo.PATCH, path, handler, middlewares...)
+	return group.Add(http.MethodPatch, path, handler, middlewares...)
 }
 
 func (group *Group) Options(path string, handler any, middlewares ...any) contracts.RouteGroup {
-	return group.Add(echo.OPTIONS, path, handler, middlewares...)
+	return group.Add(http.MethodOptions, path, handler, middlewares...)
 }
 
 func (group *Group) Routes() []contracts.Route {
