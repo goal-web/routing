@@ -53,7 +53,7 @@ func (group *Group) Group(prefix string, middlewares ...any) contracts.RouteGrou
 
 // Add 添加路由，method 只允许字符串或者字符串数组
 func (group *Group) Add(method any, path string, handler any, middlewares ...any) contracts.RouteGroup {
-	methods := make([]string, 0)
+	var methods []string
 	switch r := method.(type) {
 	case string:
 		methods = []string{r}

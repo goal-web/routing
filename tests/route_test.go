@@ -189,7 +189,7 @@ func BenchmarkName(b *testing.B) {
 	router := routing.NewRouter[*RouterTest]()
 
 	for route, tests := range routes {
-		router.Add(route, tests)
+		_, _ = router.Add(route, tests)
 	}
 
 	for i := 0; i < b.N; i++ {
