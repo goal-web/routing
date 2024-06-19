@@ -17,14 +17,14 @@ var (
 
 type Router[T any] struct {
 	paths        map[string]T
-	paramsRoutes map[string][]*RouterNode[T]
+	paramsRoutes map[string]Tree[T]
 	signatures   map[string]struct{}
 }
 
 func NewRouter[T any]() contracts.Router[T] {
 	return &Router[T]{
 		paths:        map[string]T{},
-		paramsRoutes: map[string][]*RouterNode[T]{},
+		paramsRoutes: map[string]Tree[T]{},
 		signatures:   map[string]struct{}{},
 	}
 }
@@ -47,8 +47,8 @@ func (router *Router[T]) Find(path string) (T, contracts.RouteParams, error) {
 	return tmpResult, params, err
 }
 
-func (router *Router[T]) find(path string, tree map[string][]*RouterNode[T], params contracts.RouteParams) (T, error) {
-	for prefix, nodes := range tree {
+func (router *Router[T]) find(path string, trees map[string]Tree[T], params contracts.RouteParams) (T, error) {
+	for prefix, tree := range trees {
 		index := strings.Index(path, prefix)
 		if index != 0 {
 			if prefix[len(prefix)-1:] != "/" || strings.Index(path+"/", prefix) != 0 {
@@ -58,14 +58,17 @@ func (router *Router[T]) find(path string, tree map[string][]*RouterNode[T], par
 			}
 		}
 		value := path[len(prefix):]
-		for _, node := range nodes {
+		if len(tree.Nodes) == 0 && value == "" {
+			return tree.Data, nil
+		}
+		for _, node := range tree.Nodes {
 			if len(node.nodes) == 0 {
 				if !strings.Contains(value, "/") && (node.reg.MatchString(value) || (node.optional && value == "")) {
 					params[node.name] = value
-					return node.data, nil
+					return tree.Data, nil
 				}
 			} else {
-				for subPrefix, subNodes := range node.nodes {
+				for subPrefix, subTree := range node.nodes {
 					if subPrefix == "/" {
 						values := strings.Split(value, "/")
 						if node.reg.MatchString(values[0]) {
@@ -84,8 +87,8 @@ func (router *Router[T]) find(path string, tree map[string][]*RouterNode[T], par
 							params[node.name] = subValue
 
 							value = value[index:]
-							if len(subNodes) == 0 && value == subPrefix {
-								return node.data, nil
+							if len(subTree.Nodes) == 0 && value == subPrefix && len(node.nodes) == 0 {
+								return subTree.Data, nil
 							}
 
 							result, err := router.find(value, node.nodes, params)
@@ -93,9 +96,9 @@ func (router *Router[T]) find(path string, tree map[string][]*RouterNode[T], par
 								return result, nil
 							}
 						}
-					} else if "/"+value == subPrefix && node.optional && len(subNodes) == 0 {
+					} else if "/"+value == subPrefix && node.optional && len(subTree.Nodes) == 0 {
 						params[node.name] = ""
-						return node.data, nil
+						return subTree.Data, nil
 					}
 				}
 			}
@@ -119,28 +122,33 @@ func (router *Router[T]) Add(route string, data T) (string, error) {
 		for _, param := range results {
 			if !(strings.HasPrefix(param, "{") && strings.HasSuffix(param, "}")) {
 				prefix = param
-				if tmpTree[prefix] == nil {
-					tmpTree[prefix] = make([]*RouterNode[T], 0)
+				if _, exists := tmpTree[prefix]; !exists {
+					tmpTree[prefix] = Tree[T]{
+						Nodes: make([]*ParamNode[T], 0),
+						Data:  data,
+					}
 				}
 				continue
 			}
 
-			node := NewRouteNode(param, data)
-			nodes := tmpTree[prefix]
+			node := NewRouteNode[T](param)
+			tree := tmpTree[prefix]
 
-			if len(nodes) == 0 {
-				tmpTree[prefix] = append(nodes, node)
+			if len(tree.Nodes) == 0 {
+				tree.Nodes = append(tree.Nodes, node)
+				tmpTree[prefix] = tree
 				tmpTree = node.nodes
 			} else {
 				exists := false
-				for _, item := range tmpTree[prefix] {
+				for _, item := range tmpTree[prefix].Nodes {
 					if item.IsSame(node) {
 						tmpTree = item.nodes
 						exists = true
 					}
 				}
 				if !exists {
-					tmpTree[prefix] = append(nodes, node)
+					tree.Nodes = append(tree.Nodes, node)
+					tmpTree[prefix] = tree
 					tmpTree = node.nodes
 				}
 			}

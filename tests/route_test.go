@@ -8,45 +8,23 @@ import (
 	"testing"
 )
 
-func TestRouter(t *testing.T) {
-	router := routing.NewRouter[*RouterTest]()
-
-	for route, tests := range routes {
-		signature, err := router.Add(route, tests)
-		assert.NoError(t, err, signature, route)
-		for _, errRoute := range tests.errRoutes {
-			signature, err = router.Add(errRoute, tests)
-			assert.Error(t, err, signature, route)
-		}
-	}
-
-	for route, test := range routes {
-		for path, params := range test.successfulPaths {
-			_, results, err := router.Find(path)
-			if err != nil {
-				fmt.Println(route, path, err.Error())
-			} else {
-				for key, value := range params {
-					if results[key] != value {
-						assert.True(t, results[key] == value)
-					}
-				}
-			}
-			assert.NoError(t, err, err)
-
-		}
-		for _, path := range test.notFoundPaths {
-			_, _, err := router.Find(path)
-			if err == nil {
-				fmt.Println(route, path)
-			}
-			assert.Error(t, err, err)
-		}
-	}
-	fmt.Println(router)
-}
-
 var routes = map[string]*RouterTest{
+	"/resources/{name}/list": {
+		successfulPaths: map[string]contracts.Fields{
+			"/resources/trivias/list": {"name": "trivias"},
+		},
+		notFoundPaths: []string{
+			"/resources/trivias/list1",
+		},
+	},
+	"/resources/{name}/meta": {
+		successfulPaths: map[string]contracts.Fields{
+			"/resources/trivias/meta": {"name": "trivias"},
+		},
+		notFoundPaths: []string{
+			"/resources/trivias/meta1",
+		},
+	},
 	"/books/{name}_description": {
 		successfulPaths: map[string]contracts.Fields{
 			"/books/docker_description": {"name": "docker"},
@@ -81,8 +59,8 @@ var routes = map[string]*RouterTest{
 	"/articles1/first_{type?}": {
 		successfulPaths: map[string]contracts.Fields{
 			"/articles1/first_docker": {"type": "docker"},
-			"/articles/first_k8s":     {"type": "k8s"},
-			"/articles/first_":        {"type": ""},
+			"/articles1/first_k8s":    {"type": "k8s"},
+			"/articles1/first_":       {"type": ""},
 		},
 		notFoundPaths: []string{
 			"/articles1/first_/description",
@@ -178,7 +156,51 @@ var routes = map[string]*RouterTest{
 	},
 }
 
+func TestRouter(t *testing.T) {
+	router := routing.NewRouter[*RouterTest]()
+
+	for route, tests := range routes {
+		tests.signature = route
+		signature, err := router.Add(route, tests)
+		assert.NoError(t, err, signature, route)
+
+		for _, errRoute := range tests.errRoutes {
+			signature, err = router.Add(errRoute, tests)
+			assert.Error(t, err, signature, route)
+		}
+	}
+
+	for route, test := range routes {
+		for path, params := range test.successfulPaths {
+			data, results, err := router.Find(path)
+			if data != nil {
+				assert.True(t, data.signature == route, fmt.Sprintf("%s result is not correct. %s != %s", path, data.signature, route))
+			}
+			if err != nil {
+				fmt.Println(route, path, err.Error())
+			} else {
+				for key, value := range params {
+					if results[key] != value {
+						assert.True(t, results[key] == value)
+					}
+				}
+			}
+			assert.NoError(t, err, err)
+
+		}
+		for _, path := range test.notFoundPaths {
+			_, _, err := router.Find(path)
+			if err == nil {
+				fmt.Println(route, path)
+			}
+			assert.Error(t, err, err)
+		}
+	}
+	fmt.Println(router)
+}
+
 type RouterTest struct {
+	signature       string
 	successfulPaths map[string]contracts.Fields
 	notFoundPaths   []string
 	errRoutes       []string
