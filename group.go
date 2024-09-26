@@ -76,7 +76,14 @@ func (group *Group) Get(path string, handler any, middlewares ...any) contracts.
 	return group.Add(http.MethodGet, path, handler, middlewares...)
 }
 
+func (group *Group) GET(path string, handler any, middlewares ...any) contracts.RouteGroup {
+	return group.Add(http.MethodGet, path, handler, middlewares...)
+}
+
 func (group *Group) Post(path string, handler any, middlewares ...any) contracts.RouteGroup {
+	return group.Add(http.MethodPost, path, handler, middlewares...)
+}
+func (group *Group) POST(path string, handler any, middlewares ...any) contracts.RouteGroup {
 	return group.Add(http.MethodPost, path, handler, middlewares...)
 }
 
@@ -84,7 +91,14 @@ func (group *Group) Delete(path string, handler any, middlewares ...any) contrac
 	return group.Add(http.MethodDelete, path, handler, middlewares...)
 }
 
+func (group *Group) DELETE(path string, handler any, middlewares ...any) contracts.RouteGroup {
+	return group.Add(http.MethodDelete, path, handler, middlewares...)
+}
+
 func (group *Group) Put(path string, handler any, middlewares ...any) contracts.RouteGroup {
+	return group.Add(http.MethodPut, path, handler, middlewares...)
+}
+func (group *Group) PUT(path string, handler any, middlewares ...any) contracts.RouteGroup {
 	return group.Add(http.MethodPut, path, handler, middlewares...)
 }
 
@@ -92,11 +106,22 @@ func (group *Group) Trace(path string, handler any, middlewares ...any) contract
 	return group.Add(http.MethodTrace, path, handler, middlewares...)
 }
 
+func (group *Group) TRACE(path string, handler any, middlewares ...any) contracts.RouteGroup {
+	return group.Add(http.MethodTrace, path, handler, middlewares...)
+}
+
 func (group *Group) Patch(path string, handler any, middlewares ...any) contracts.RouteGroup {
 	return group.Add(http.MethodPatch, path, handler, middlewares...)
 }
 
+func (group *Group) PATCH(path string, handler any, middlewares ...any) contracts.RouteGroup {
+	return group.Add(http.MethodPatch, path, handler, middlewares...)
+}
+
 func (group *Group) Options(path string, handler any, middlewares ...any) contracts.RouteGroup {
+	return group.Add(http.MethodOptions, path, handler, middlewares...)
+}
+func (group *Group) OPTIONS(path string, handler any, middlewares ...any) contracts.RouteGroup {
 	return group.Add(http.MethodOptions, path, handler, middlewares...)
 }
 

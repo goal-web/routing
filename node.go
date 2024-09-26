@@ -28,6 +28,23 @@ type Tree[T any] struct {
 	Nodes []*ParamNode[T]
 }
 
+func (tree Tree[T]) All() []T {
+	var list []T
+
+	if len(tree.Nodes) == 0 {
+		list = append(list, tree.Data)
+		return list
+	} else {
+		for _, node := range tree.Nodes {
+			for _, item := range node.nodes {
+				list = append(list, item.All()...)
+			}
+		}
+	}
+
+	return list
+}
+
 func (router *ParamNode[T]) IsSame(node *ParamNode[T]) bool {
 	return router.optional == node.optional && router.rule == node.rule && node.name == router.name
 }

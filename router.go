@@ -158,3 +158,17 @@ func (router *Router[T]) Add(route string, data T) (string, error) {
 	router.signatures[signature] = struct{}{}
 	return signature, nil
 }
+
+func (router *Router[T]) All() []T {
+	var list []T
+
+	for _, item := range router.paths {
+		list = append(list, item)
+	}
+
+	for _, tree := range router.paramsRoutes {
+		list = append(list, tree.All()...)
+	}
+
+	return list
+}

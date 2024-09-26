@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/goal-web/container"
 	"github.com/goal-web/contracts"
+	"github.com/modood/table"
 	"net/http"
 	"net/url"
 	"strings"
@@ -62,6 +63,48 @@ func (httpRouter *HttpRouter) addHostRoute(hostRouters map[string]map[string]con
 	}
 
 	return nil
+}
+
+type RoutePrintItem struct {
+	Path       string
+	Method     string
+	Controller string
+	Middleware string
+	Host       string
+}
+
+func (httpRouter *HttpRouter) Print() {
+	var list []RoutePrintItem
+	var routes = httpRouter.routes
+
+	for _, group := range httpRouter.groups {
+		routes = append(routes, group.Routes()...)
+	}
+	for _, router := range httpRouter.routers {
+		routes = append(routes, router.All()...)
+	}
+
+	for _, router := range httpRouter.hostsRouters.All() {
+		for _, subRouter := range router {
+			routes = append(routes, subRouter.All()...)
+		}
+	}
+
+	for _, route := range routes {
+		var middlewares []string
+		for _, mid := range route.Middlewares() {
+			middlewares = append(middlewares, mid.Signature())
+		}
+		list = append(list, RoutePrintItem{
+			Path:       route.GetPath(),
+			Host:       route.GetHost(),
+			Method:     strings.Join(route.Method(), ","),
+			Controller: route.Handler().Signature(),
+			Middleware: strings.Join(middlewares, ","),
+		})
+	}
+
+	table.Output(list)
 }
 
 func (httpRouter *HttpRouter) addRoute(routers map[string]contracts.Router[contracts.Route], route contracts.Route) []string {
@@ -207,7 +250,15 @@ func (httpRouter *HttpRouter) Get(path string, handler any, middlewares ...any) 
 	return httpRouter.Add(http.MethodGet, path, handler, middlewares...)
 }
 
+func (httpRouter *HttpRouter) GET(path string, handler any, middlewares ...any) contracts.Route {
+	return httpRouter.Add(http.MethodGet, path, handler, middlewares...)
+}
+
 func (httpRouter *HttpRouter) Post(path string, handler any, middlewares ...any) contracts.Route {
+	return httpRouter.Add(http.MethodPost, path, handler, middlewares...)
+}
+
+func (httpRouter *HttpRouter) POST(path string, handler any, middlewares ...any) contracts.Route {
 	return httpRouter.Add(http.MethodPost, path, handler, middlewares...)
 }
 
@@ -215,7 +266,14 @@ func (httpRouter *HttpRouter) Delete(path string, handler any, middlewares ...an
 	return httpRouter.Add(http.MethodDelete, path, handler, middlewares...)
 }
 
+func (httpRouter *HttpRouter) DELETE(path string, handler any, middlewares ...any) contracts.Route {
+	return httpRouter.Add(http.MethodDelete, path, handler, middlewares...)
+}
+
 func (httpRouter *HttpRouter) Put(path string, handler any, middlewares ...any) contracts.Route {
+	return httpRouter.Add(http.MethodPut, path, handler, middlewares...)
+}
+func (httpRouter *HttpRouter) PUT(path string, handler any, middlewares ...any) contracts.Route {
 	return httpRouter.Add(http.MethodPut, path, handler, middlewares...)
 }
 
@@ -223,11 +281,22 @@ func (httpRouter *HttpRouter) Patch(path string, handler any, middlewares ...any
 	return httpRouter.Add(http.MethodPatch, path, handler, middlewares...)
 }
 
+func (httpRouter *HttpRouter) PATCH(path string, handler any, middlewares ...any) contracts.Route {
+	return httpRouter.Add(http.MethodPatch, path, handler, middlewares...)
+}
+
 func (httpRouter *HttpRouter) Options(path string, handler any, middlewares ...any) contracts.Route {
 	return httpRouter.Add(http.MethodOptions, path, handler, middlewares...)
 }
 
+func (httpRouter *HttpRouter) OPTIONS(path string, handler any, middlewares ...any) contracts.Route {
+	return httpRouter.Add(http.MethodOptions, path, handler, middlewares...)
+}
+
 func (httpRouter *HttpRouter) Trace(path string, handler any, middlewares ...any) contracts.Route {
+	return httpRouter.Add(http.MethodTrace, path, handler, middlewares...)
+}
+func (httpRouter *HttpRouter) TRACE(path string, handler any, middlewares ...any) contracts.Route {
 	return httpRouter.Add(http.MethodTrace, path, handler, middlewares...)
 }
 
