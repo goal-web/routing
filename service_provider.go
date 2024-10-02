@@ -10,12 +10,7 @@ func NewService() contracts.ServiceProvider {
 }
 
 func (s ServiceProvider) Register(application contracts.Application) {
-	application.Call(func(console contracts.Console) {
-		console.RegisterCommand("route:list", NewRouteList)
-	})
-	application.Singleton("HttpRouter", func(console contracts.Console) contracts.HttpRouter {
-		return NewHttpRouter(application)
-	})
+
 }
 
 func (s ServiceProvider) Start() error {

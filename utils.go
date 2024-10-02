@@ -1,10 +1,14 @@
 package routing
 
 import (
+	"github.com/goal-web/collection"
 	"github.com/goal-web/container"
 	"github.com/goal-web/contracts"
 	"strings"
+	"sync"
 )
+
+var middlewareSignatures = sync.Map{}
 
 func parseRule(param string) (string, string, bool) {
 	name := param[1 : len(param)-1]
@@ -59,11 +63,30 @@ func parseRoute(route string) ([]string, string) {
 	return results, signature
 }
 
-func ConvertToMiddlewares(middlewares ...any) (results []contracts.MagicalFunc) {
+func ConvertToMiddlewares(factory contracts.Middleware, middlewares ...any) (results []contracts.MagicalFunc) {
 	for _, middleware := range middlewares {
 		magicalFunc, isMiddleware := middleware.(contracts.MagicalFunc)
 		if !isMiddleware {
+			var alias string
+			// 类似 auth:api 这种使用方式
+			if middlewareStr, ok := middleware.(string); ok {
+				alias = middlewareStr
+				argsStr := strings.Split(middlewareStr, ":")
+				name := argsStr[0]
+
+				middleware = func(next contracts.Pipe, request contracts.HttpRequest) any {
+					var args = append([]any{next, request}, collection.Collect[string, any](argsStr[1:]).ToP(func(s string) any {
+						return s
+					})...)
+
+					return factory.Call(name, args...)
+				}
+			}
 			magicalFunc = container.NewMagicalFunc(middleware)
+			if alias == "" {
+				alias = magicalFunc.Signature()
+			}
+			middlewareSignatures.Store(magicalFunc.Signature(), alias)
 		}
 		if magicalFunc.NumOut() != 1 {
 			panic(MiddlewareError)

@@ -5,11 +5,13 @@ import (
 	"github.com/goal-web/supports/commands"
 )
 
-func NewRouteList(app contracts.Application) contracts.Command {
-	return &RouteList{
-		Command: commands.Base("route:list", "打印路由列表"),
-		router:  app.Get("HttpRouter").(contracts.HttpRouter),
-	}
+func NewRouteList() (contracts.Command, contracts.CommandHandlerProvider) {
+	return commands.Base("route:list", "打印路由列表"),
+		func(app contracts.Application) contracts.CommandHandler {
+			return &RouteList{
+				router: app.Get("HttpRouter").(contracts.HttpRouter),
+			}
+		}
 }
 
 type RouteList struct {

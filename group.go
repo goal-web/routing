@@ -17,6 +17,8 @@ type Group struct {
 	middlewares []contracts.MagicalFunc
 	routes      []contracts.Route
 	groups      []contracts.RouteGroup
+
+	middlewareFactory contracts.Middleware
 }
 
 func (group *Group) GetHost() string {
@@ -28,12 +30,13 @@ func (group *Group) Host(host string) contracts.RouteGroup {
 	return group
 }
 
-func NewGroup(prefix string, middlewares ...any) contracts.RouteGroup {
+func NewGroup(middlewareFactory contracts.Middleware, prefix string, middlewares ...any) contracts.RouteGroup {
 	return &Group{
-		prefix:      prefix,
-		routes:      make([]contracts.Route, 0),
-		groups:      make([]contracts.RouteGroup, 0),
-		middlewares: ConvertToMiddlewares(middlewares...),
+		prefix:            prefix,
+		routes:            make([]contracts.Route, 0),
+		groups:            make([]contracts.RouteGroup, 0),
+		middlewares:       ConvertToMiddlewares(middlewareFactory, middlewares...),
+		middlewareFactory: middlewareFactory,
 	}
 }
 
@@ -43,7 +46,7 @@ func (group *Group) Group(prefix string, middlewares ...any) contracts.RouteGrou
 		prefix:      group.prefix + prefix,
 		routes:      make([]contracts.Route, 0),
 		groups:      make([]contracts.RouteGroup, 0),
-		middlewares: append(group.middlewares, ConvertToMiddlewares(middlewares...)...),
+		middlewares: append(group.middlewares, ConvertToMiddlewares(group.middlewareFactory, middlewares...)...),
 	}
 
 	group.groups = append(group.groups, groupInstance)
@@ -65,7 +68,7 @@ func (group *Group) Add(method any, path string, handler any, middlewares ...any
 	group.routes = append(group.routes, &Route{
 		method:      methods,
 		path:        group.prefix + path,
-		middlewares: append(group.middlewares, ConvertToMiddlewares(middlewares...)...),
+		middlewares: append(group.middlewares, ConvertToMiddlewares(group.middlewareFactory, middlewares...)...),
 		handler:     container.NewMagicalFunc(handler),
 	})
 

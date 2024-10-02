@@ -30,11 +30,12 @@ var (
 )
 
 type HttpRouter struct {
-	app          contracts.Application
-	groups       []contracts.RouteGroup
-	routes       []contracts.Route
-	routers      map[string]contracts.Router[contracts.Route]
-	hostsRouters contracts.Router[map[string]contracts.Router[contracts.Route]]
+	app               contracts.Application
+	groups            []contracts.RouteGroup
+	routes            []contracts.Route
+	routers           map[string]contracts.Router[contracts.Route]
+	hostsRouters      contracts.Router[map[string]contracts.Router[contracts.Route]]
+	middlewareFactory contracts.Middleware
 
 	// 全局中间件
 	middlewares []contracts.MagicalFunc
@@ -42,12 +43,13 @@ type HttpRouter struct {
 
 func NewHttpRouter(app contracts.Application) contracts.HttpRouter {
 	router := &HttpRouter{
-		app:          app,
-		routes:       make([]contracts.Route, 0),
-		groups:       make([]contracts.RouteGroup, 0),
-		middlewares:  make([]contracts.MagicalFunc, 0),
-		routers:      map[string]contracts.Router[contracts.Route]{},
-		hostsRouters: NewRouter[map[string]contracts.Router[contracts.Route]](),
+		app:               app,
+		routes:            make([]contracts.Route, 0),
+		groups:            make([]contracts.RouteGroup, 0),
+		middlewares:       make([]contracts.MagicalFunc, 0),
+		middlewareFactory: app.Get("HttpMiddleware").(contracts.Middleware),
+		routers:           map[string]contracts.Router[contracts.Route]{},
+		hostsRouters:      NewRouter[map[string]contracts.Router[contracts.Route]](),
 	}
 
 	return router
@@ -75,6 +77,7 @@ type RoutePrintItem struct {
 
 func (httpRouter *HttpRouter) Print() {
 	var list []RoutePrintItem
+	var routeMap = make(map[string]struct{})
 	var routes = httpRouter.routes
 
 	for _, group := range httpRouter.groups {
@@ -93,15 +96,21 @@ func (httpRouter *HttpRouter) Print() {
 	for _, route := range routes {
 		var middlewares []string
 		for _, mid := range route.Middlewares() {
-			middlewares = append(middlewares, mid.Signature())
+			if midSignature, ok := middlewareSignatures.Load(mid.Signature()); ok {
+				middlewares = append(middlewares, midSignature.(string))
+			}
 		}
-		list = append(list, RoutePrintItem{
-			Path:       route.GetPath(),
-			Host:       route.GetHost(),
-			Method:     strings.Join(route.Method(), ","),
-			Controller: route.Handler().Signature(),
-			Middleware: strings.Join(middlewares, ","),
-		})
+		sign := route.GetPath() + route.GetHost() + strings.Join(route.Method(), ",") + route.Handler().Signature()
+		if _, exists := routeMap[sign]; !exists {
+			routeMap[sign] = struct{}{}
+			list = append(list, RoutePrintItem{
+				Path:       route.GetPath(),
+				Host:       route.GetHost(),
+				Method:     strings.Join(route.Method(), ","),
+				Controller: route.Handler().Signature(),
+				Middleware: strings.Join(middlewares, ","),
+			})
+		}
 	}
 
 	table.Output(list)
@@ -182,7 +191,7 @@ func (httpRouter *HttpRouter) Add(method any, path string, handler any, middlewa
 	case []string:
 		methods = v
 	}
-	route := NewRoute(methods, path, ConvertToMiddlewares(middlewares...), container.NewMagicalFunc(handler))
+	route := NewRoute(methods, path, ConvertToMiddlewares(httpRouter.middlewareFactory, middlewares...), container.NewMagicalFunc(handler))
 	httpRouter.routes = append(httpRouter.routes, route)
 	return route
 }
@@ -239,7 +248,7 @@ func (httpRouter *HttpRouter) route(method string, url *url.URL) (contracts.Rout
 }
 
 func (httpRouter *HttpRouter) Group(prefix string, middlewares ...any) contracts.RouteGroup {
-	groupInstance := NewGroup(prefix, middlewares...)
+	groupInstance := NewGroup(httpRouter.middlewareFactory, prefix, middlewares...)
 
 	httpRouter.groups = append(httpRouter.groups, groupInstance)
 
