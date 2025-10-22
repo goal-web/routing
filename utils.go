@@ -1,11 +1,11 @@
 package routing
 
 import (
-	"github.com/goal-web/collection"
-	"github.com/goal-web/container"
-	"github.com/goal-web/contracts"
 	"strings"
 	"sync"
+
+	"github.com/goal-web/container"
+	"github.com/goal-web/contracts"
 )
 
 var middlewareSignatures = sync.Map{}
@@ -75,9 +75,10 @@ func ConvertToMiddlewares(factory contracts.Middleware, middlewares ...any) (res
 				name := argsStr[0]
 
 				middleware = func(next contracts.Pipe, request contracts.HttpRequest) any {
-					var args = append([]any{next, request}, collection.Collect[string, any](argsStr[1:]).ToP(func(s string) any {
-						return s
-					})...)
+					var args = []any{next, request}
+					for _, arg := range argsStr[1:] {
+						args = append(args, arg)
+					}
 
 					return factory.Call(name, args...)
 				}
